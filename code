@@ -1,0 +1,137 @@
+import './App.css';
+import React, { useRef, useEffect, useState, useCallback } from 'react'
+import { Drawer, NavBar, Icon } from 'antd-mobile';
+import webSocket from 'socket.io-client'
+
+import audio_icon11 from './assets/icons/drum-154583.svg'
+import audio_icon12 from './assets/icons/small-drum-2121308.svg'
+import audio_icon13 from './assets/icons/grand-piano-161447.svg'
+import audio_icon21 from './assets/icons/guitar-149427.svg'
+import audio_icon22 from './assets/icons/harp-31358.svg'
+import audio_icon23 from './assets/icons/vinyl-2241789.svg'
+
+import audio00 from './assets/audio/audio1.mp3'
+import audio01 from './assets/audio/audio2.mp3'
+import audio02 from './assets/audio/audio3.mp3'
+import audio10 from './assets/audio/audio4.mp3' 
+import audio11 from './assets/audio/audio5.mp3'
+import audio12 from './assets/audio/audio6.mp3'
+
+import Player from './components/player/Player';
+import MobilePlayer from './components/mobileplayer/MobilePlayer';
+import Iframe from './components/IFrame/Iframe'
+import Login from './components/BBBUG/login'
+import Modal from './components/Modal/modal'
+import TestModal from './components/TestBCopy/TestB'
+
+import axios from 'axios';
+
+import ShapeOverlays from './util/ShapeOverlays'
+import animations from './util/animations';
+import parse from './util/blueParse'
+import useThrottling from './hook/useThrottling'
+
+// Audio source
+const musicFragments = [
+  [audio00, audio01, audio02],
+  [audio10, audio11, audio12],
+];
+
+
+// URL Adaptation
+const wsUrl = process.env.NODE_ENV == "development" ? 'http://localhost:5000/test' : 'http://119.8.32.53:3002'
+
+function App() {
+  const svgRef = useRef();
+  const [bgChangeCnt, setbgChangeCnt] = useState(0);
+  const [musicKey, setmusciKey] = useState(undefined);
+  const [playerDrawer, setplayerDrawer] = useState(false)
+  const [ifIframe, setIfIframe] = useState(false);
+  const [access_token, set_access_token] = useState('');
+  const [isModalShowing, setisModalShowing] = useState(false);
+  const [roomId, setroomId] = useState('');
+  const [ws, setWs] = useState(null);
+  const [isTest, setTest] = useState(false);
+  const characteristic = useRef(null);
+
+
+  // Open WS link
+  const connectWebSocket = () => {
+    if (!roomId) {
+      setisModalShowing(true)
+    } else {
+      setWs(webSocket(wsUrl))
+    }
+  }
+
+  const initWebSocket = useCallback(() => {
+    ws.on('getMessageLess', message => {
+      console.log(message);
+      new Audio(musicFragments[message['row']][message['col']]).play();
+      callAnimation(message['row'], message['col']);
+    })
+  }, [ws])
+
+  const sendMessage = useCallback((row, col) => {
+    if (!ws) {
+      return
+    }
+    ws.emit('getMessageLess', { row, col, room: roomId })
+  }, [ws])
+
+  useEffect(() => {
+    window.addEventListener('keypress', keydown);
+    return () => window.removeEventListener('keypress', keydown)
+  }, [setmusciKey, bgChangeCnt])
+
+  const keydown = (event) => {
+    setmusciKey(event.key);
+    switch (event.key) {
+      case 'a':
+        stroke(0, 0);
+        break;
+      case 's':
+        stroke(0, 1);
+        break;
+      case 'd':
+        stroke(0, 2);
+        break;
+      case 'j':
+        stroke(1, 0);
+        break;
+      case 'k':
+        stroke(1, 1);
+        break;
+      case 'l':
+        stroke(1, 2);
+        break;
+      default:
+        return
+    };
+  }
+
+  const callAnimation = useThrottling((row, col) => {
+    animations[row * 3 + col]();
+  }, () => { }, 400);
+
+  const getCurBgColor = (bgChangeCnt) => {
+    const colors = ['#efcb7b', '#0d1831', '#ff9b83', '#61bfad'];
+    bgChangeCnt /= 5;
+    return colors[bgChangeCnt % 4];
+  }
+
+  const changeBackGround = () => {
+    if (bgChangeCnt % 10 === 0) {
+      document.documentElement.style.setProperty('--color-bg', getCurBgColor(bgChangeCnt));
+    } else if (bgChangeCnt % 5 === 0) {
+      document.documentElement.style.setProperty('--path-fill-4', getCurBgColor(bgChangeCnt));
+    }
+  }
+
+  const stroke = (row, col) => {
+    setbgChangeCnt(bgChangeCnt + 1);
+    new Audio(musicFragments[row][col]).play();
+    changeBackGround();
+    callAnimation(row, col);
+    sendMessage(row, col);
+  }
